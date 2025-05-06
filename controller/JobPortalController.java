@@ -1,6 +1,4 @@
 package controller;
-
-import model.Applicant;
 import model.ApplicantBST;
 import model.Company;
 import model.Job;
