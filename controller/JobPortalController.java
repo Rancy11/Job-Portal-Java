@@ -7,10 +7,8 @@ import model.Job;
 import model.DatabaseConnection;
 import view.JobPortalView;
 
-import java.sql.Connection;
-import java.sql.PreparedStatement;
-import java.sql.ResultSet;
-import java.sql.SQLException;
+import java.math.BigDecimal;
+import java.sql.*;
 import java.util.ArrayList;
 
 public class JobPortalController {
@@ -97,13 +95,23 @@ public class JobPortalController {
             view.displayMessage("❌ Error registering applicant: " + e.getMessage());
         }
     }
-
     private void postJob() {
         String cname = view.getInput("Enter company name: ");
         String industry = view.getInput("Enter industry: ");
         String title = view.getInput("Enter job title: ");
         String desc = view.getInput("Enter job description: ");
+        BigDecimal salary = null;
+        while (salary == null) {
+            try {
+                String salaryInput = view.getInput("Enter job salary (e.g., 50000.00): ");
+                salary = new BigDecimal(salaryInput);
+            } catch (NumberFormatException e) {
+                view.displayMessage("❌ Invalid salary. Please enter a valid number.");
+            }
+        }
+
         try (Connection conn = DatabaseConnection.getConnection()) {
+            // Insert company if not exists
             String sql = "INSERT INTO companies (name, industry) VALUES (?, ?)";
             PreparedStatement stmt = conn.prepareStatement(sql);
             stmt.setString(1, cname);
@@ -121,11 +129,12 @@ public class JobPortalController {
             }
 
             // Post the job
-            sql = "INSERT INTO jobs (title, description, company_id) VALUES (?, ?, ?)";
+            sql = "INSERT INTO jobs (title, description, company_id, salary) VALUES (?, ?, ?, ?)";
             stmt = conn.prepareStatement(sql);
             stmt.setString(1, title);
             stmt.setString(2, desc);
             stmt.setInt(3, companyId);
+            stmt.setBigDecimal(4, salary);
             stmt.executeUpdate();
             view.displayMessage("✅ Job posted!");
         } catch (SQLException e) {
@@ -155,7 +164,6 @@ public class JobPortalController {
             view.displayMessage("❌ Error retrieving applicants: " + e.getMessage());
         }
     }
-
     private void changeApplicationStatus() {
         String applicantEmail = view.getInput("Enter applicant email: ");
         String jobTitle = view.getInput("Enter job title: ");
@@ -174,19 +182,26 @@ public class JobPortalController {
             view.displayMessage("❌ Error updating application status: " + e.getMessage());
         }
     }
-
     private void viewJobs() {
         try (Connection conn = DatabaseConnection.getConnection()) {
-            String sql = "SELECT title, description FROM jobs";
-            PreparedStatement stmt = conn.prepareStatement(sql);
-            ResultSet rs = stmt.executeQuery();
+            // Join jobs and companies tables to get the company name
+            String sql = "SELECT j.id, j.title, c.name AS company_name, j.salary " +
+                    "FROM jobs j " +
+                    "JOIN companies c ON j.company_id = c.id";
+
+            Statement stmt = conn.createStatement();
+            ResultSet rs = stmt.executeQuery(sql);
+            System.out.println("\nAvailable Jobs:");
             while (rs.next()) {
+                int jobId = rs.getInt("id");
                 String title = rs.getString("title");
-                String description = rs.getString("description");
-                view.displayMessage("Job Title: " + title + ", Description: " + description);
+                String companyName = rs.getString("company_name");  // Now fetching company name
+                BigDecimal salary = rs.getBigDecimal("salary");
+
+                System.out.println("ID: " + jobId + " | Title: " + title + " | Company: " + companyName + " | Salary: " + salary);
             }
         } catch (SQLException e) {
-            view.displayMessage("❌ Error retrieving jobs: " + e.getMessage());
+            view.displayMessage("❌ Error fetching jobs: " + e.getMessage());
         }
     }
 
@@ -194,24 +209,30 @@ public class JobPortalController {
         String email = view.getInput("Enter your email: ");
         String jobTitle = view.getInput("Enter job title to apply: ");
         try (Connection conn = DatabaseConnection.getConnection()) {
-            // Get applicant ID
+            // Check if applicant exists
             String sql = "SELECT id FROM applicants WHERE email = ?";
             PreparedStatement stmt = conn.prepareStatement(sql);
             stmt.setString(1, email);
             ResultSet rs = stmt.executeQuery();
-            int applicantId = 0;
+            int applicantId = -1;
             if (rs.next()) {
                 applicantId = rs.getInt("id");
+            } else {
+                view.displayMessage("❌ This email is not registered! Please register first.");
+                return;
             }
 
-            // Get job ID
+            // Check if job exists
             sql = "SELECT id FROM jobs WHERE title = ?";
             stmt = conn.prepareStatement(sql);
             stmt.setString(1, jobTitle);
             rs = stmt.executeQuery();
-            int jobId = 0;
+            int jobId = -1;
             if (rs.next()) {
                 jobId = rs.getInt("id");
+            } else {
+                view.displayMessage("❌ Job title not found.");
+                return;
             }
 
             // Insert application
@@ -225,4 +246,5 @@ public class JobPortalController {
             view.displayMessage("❌ Error applying for job: " + e.getMessage());
         }
     }
+
 }

@@ -35,12 +35,15 @@ public class JobPortalView {
     }
 
     public int getUserChoice() {
-        return scanner.nextInt();
+        int choice = scanner.nextInt();
+        scanner.nextLine(); // Consume leftover newline
+        return choice;
     }
+
 
     public String getInput(String prompt) {
         System.out.print(prompt);
-        return scanner.next();
+        return scanner.nextLine();
     }
 
     public void displayMessage(String message) {
