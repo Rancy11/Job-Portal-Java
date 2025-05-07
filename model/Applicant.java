@@ -1,6 +1,5 @@
 package model;
 import java.util.ArrayList;
-
 public class Applicant {
     String name;
     String email;
