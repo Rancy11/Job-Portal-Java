@@ -178,33 +178,41 @@ public class JobPortalController {
     }
 
     private void updateApplicationStatus() {
-        String email = view.getInput("Enter applicant email: ");
-        String job = view.getInput("Enter job title: ");
-        String status = view.getInput("Enter status (accepted/rejected): ");
+        String employerEmail = view.getInput("Enter your (employer) email: ");
+        String applicantEmail = view.getInput("Enter applicant email: ");
+        String jobTitle = view.getInput("Enter job title: ");
+        String status = view.getInput("Enter new status (accepted/rejected): ");
 
         try (Connection conn = DatabaseConnection.getConnection()) {
             String sql = """
-                UPDATE applications ap
-                JOIN applicants a ON ap.applicant_id = a.id
-                JOIN jobs j ON ap.job_id = j.id
-                SET ap.status = ?
-                WHERE a.email = ? AND j.title = ?
-            """;
+            UPDATE applications ap
+            JOIN applicants a ON ap.applicant_id = a.id
+            JOIN jobs j ON ap.job_id = j.id
+            JOIN employers e ON j.employer_id = e.id
+            SET ap.status = ?
+            WHERE a.email = ? AND j.title = ? AND e.email = ?
+        """;
+
             PreparedStatement stmt = conn.prepareStatement(sql);
             stmt.setString(1, status);
-            stmt.setString(2, email);
-            stmt.setString(3, job);
+            stmt.setString(2, applicantEmail);
+            stmt.setString(3, jobTitle);
+            stmt.setString(4, employerEmail); // Match only the correct employer
 
             int updated = stmt.executeUpdate();
             if (updated > 0) {
-                view.displayMessage("✅ Status updated.");
+                view.displayMessage("✅ Application status updated.");
             } else {
-                view.displayMessage("❌ No application found.");
+                view.displayMessage("❌ No matching application found or unauthorized attempt.");
             }
         } catch (SQLException e) {
             view.displayMessage("❌ Error updating status: " + e.getMessage());
         }
     }
+
+
+
+
 
     private int getEmployerId(String email) {
         try (Connection conn = DatabaseConnection.getConnection()) {
@@ -229,7 +237,8 @@ public class JobPortalController {
                 case 1 -> registerApplicant();
                 case 2 -> showAllJobs();
                 case 3 -> applyToJob();
-                case 4 -> {
+                case 4 -> viewAppliedJobs();
+                case 5 -> {
                     view.displayMessage("🔙 Back to main menu.");
                     return;
                 }
@@ -307,11 +316,11 @@ public class JobPortalController {
 
             // Get matching jobs
             sql = """
-                SELECT j.id, j.title, c.name AS company_name, j.salary
-                FROM jobs j
-                JOIN companies c ON j.company_id = c.id
-                WHERE j.title = ?
-            """;
+        SELECT j.id, j.title, c.name AS company_name, j.salary
+        FROM jobs j
+        JOIN companies c ON j.company_id = c.id
+        WHERE j.title = ?
+        """;
             stmt = conn.prepareStatement(sql);
             stmt.setString(1, jobTitle);
             rs = stmt.executeQuery();
@@ -335,6 +344,18 @@ public class JobPortalController {
                 return;
             }
 
+            // Check if applicant already applied to this exact job
+            sql = "SELECT COUNT(*) FROM applications WHERE applicant_id = ? AND job_id = ?";
+            stmt = conn.prepareStatement(sql);
+            stmt.setInt(1, applicantId);
+            stmt.setInt(2, jobId);
+            rs = stmt.executeQuery();
+
+            if (rs.next() && rs.getInt(1) > 0) {
+                view.displayMessage("❌ You've already applied to this job.");
+                return;
+            }
+
             // Apply
             sql = "INSERT INTO applications (applicant_id, job_id, status) VALUES (?, ?, 'pending')";
             stmt = conn.prepareStatement(sql);
@@ -347,4 +368,37 @@ public class JobPortalController {
             view.displayMessage("❌ Error applying: " + e.getMessage());
         }
     }
+
+    private void viewAppliedJobs() {
+        String email = view.getInput("Enter your email: ");
+        try (Connection conn = DatabaseConnection.getConnection()) {
+            String sql = """
+            SELECT j.title, c.name AS company_name, ap.status
+            FROM applications ap
+            JOIN jobs j ON ap.job_id = j.id
+            JOIN companies c ON j.company_id = c.id
+            JOIN applicants a ON ap.applicant_id = a.id
+            WHERE a.email = ?
+        """;
+            PreparedStatement stmt = conn.prepareStatement(sql);
+            stmt.setString(1, email);
+            ResultSet rs = stmt.executeQuery();
+
+            boolean hasApplications = false;
+            while (rs.next()) {
+                hasApplications = true;
+                String title = rs.getString("title");
+                String company = rs.getString("company_name");
+                String status = rs.getString("status");
+                view.displayMessage("💼 " + title + " | 🏢 " + company + " | 📌 Status: " + status);
+            }
+
+            if (!hasApplications) {
+                view.displayMessage("ℹ️ You haven't applied to any jobs yet.");
+            }
+        } catch (SQLException e) {
+            view.displayMessage("❌ Error fetching applications: " + e.getMessage());
+        }
+    }
+
 }
