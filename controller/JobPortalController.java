@@ -3,7 +3,6 @@ package controller;
 import model.ApplicantBST;
 import model.Company;
 import model.Job;
-import model.DatabaseConnection;
 import view.JobPortalView;
 
 import java.math.BigDecimal;
@@ -37,7 +36,7 @@ public class JobPortalController {
         }
     }
 
-    // ========================== EMPLOYER FLOW ==========================
+    // ========================== EMPLOYER ==========================
 
     private void handleEmployer() {
         while (true) {
@@ -209,9 +208,6 @@ public class JobPortalController {
             view.displayMessage("❌ Error updating status: " + e.getMessage());
         }
     }
-
-
-
 
 
     private int getEmployerId(String email) {
@@ -390,7 +386,7 @@ public class JobPortalController {
                 String title = rs.getString("title");
                 String company = rs.getString("company_name");
                 String status = rs.getString("status");
-                view.displayMessage("💼 " + title + " | 🏢 " + company + " | 📌 Status: " + status);
+                view.displayMessage("💼Title " + title + " | 🏢 Company" + company + " | 📌 Status: " + status);
             }
 
             if (!hasApplications) {
